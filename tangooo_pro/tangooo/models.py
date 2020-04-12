@@ -1,24 +1,65 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
+
+class UserManager(BaseUserManager):
+    def create_user(self, email, date_of_birth, school_id, password=None):
+        if not email:
+            raise ValueError('Users must have an email address')
+
+        user = self.model(
+            email=self.normalize_email(email),
+            date_of_birth=date_of_birth,
+            school_id=school_id
+        )
+
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, date_of_birth, password, school_id):
+        user = self.create_user(
+            email,
+            password=password,
+            date_of_birth=date_of_birth,
+            school_id=school_id
+        )
+        user.is_admin = True
+        user.save(using=self._db)
+        return user
+
 
 class School(models.Model):
     school_name = models.CharField("school_name", max_length=50)
 
+    def __str__(self):
+        return self.school_name
+
 class Student(AbstractUser):
+    email = models.EmailField(
+        verbose_name='email',
+        max_length=255,
+        unique=True,
+    )
+    date_of_birth = models.DateField()
+    is_active = models.BooleanField(default=True)
+    is_admin = models.BooleanField(default=False)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
 
-    def create_superuser(self, username, email, password, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('schoil_id', 0)
-        
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
+    objects = UserManager()
 
-        return self._create_user(username, email, password, **extra_fields)
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['date_of_birth', 'school_id']
+
+    def has_perm(self, perm, obj=None):
+        return True
+
+    def has_module_perms(self, app_label):
+        return True
+
+    @property
+    def is_staff(self):
+        return self.is_admin
     
 class WordCard(models.Model):
     card_name = models.CharField("card_name", max_length=30)
